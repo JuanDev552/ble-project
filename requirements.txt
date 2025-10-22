@@ -1,0 +1,4 @@
+bleak>=0.21.0
+asyncio
+Pillow  # Para manejar imágenes en tkinter
+customtkinter>=5.2.0
