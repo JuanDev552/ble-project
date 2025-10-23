@@ -3,7 +3,6 @@ import tkinter as tk
 from tkinter import messagebox
 from PIL import Image
 
-# Configuración visual general
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
@@ -14,7 +13,6 @@ class BlockApp(ctk.CTk):
 
         self.title("Control Bluetooth - Bloques Configurables")
         self.geometry("1000x600")
-
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         # ---------------- ICONOS ----------------
@@ -36,7 +34,6 @@ class BlockApp(ctk.CTk):
 
         ctk.CTkLabel(self.block_frame, text="Bloques disponibles", font=("Arial", 16, "bold")).pack(pady=5)
 
-        # Lista de bloques disponibles
         self.available_blocks = [
             ("Adelante", "move_forward", self.icons["up"]),
             ("Atrás", "move_backward", self.icons["down"]),
@@ -48,36 +45,23 @@ class BlockApp(ctk.CTk):
             ("Velocidad", "speed", self.icons["speed"]),
         ]
 
-        # Crear botones de bloques
         for name, block_type, icon in self.available_blocks:
             btn = ctk.CTkButton(
                 self.block_frame,
-                text="",
+                text=name,
                 image=icon,
+                compound="left",
                 fg_color="#1a1d29",
                 hover_color="#2b2f3d",
-                command=lambda n=name, t=block_type: self.add_block(n, t),
                 height=50,
             )
             btn.pack(pady=4, fill="x")
+            # Hacer bloque arrastrable desde panel izquierdo
+            btn.bind("<ButtonPress-1>", lambda e, n=name, t=block_type: self.start_drag(e, n, t))
 
         # ---------------- PANEL CENTRAL ----------------
         self.sequence_frame = ctk.CTkFrame(self)
         self.sequence_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
-
-        # Botón Bluetooth (esquina superior derecha)
-        self.bluetooth_button = ctk.CTkButton(
-            self.sequence_frame,
-            text="",
-            image=self.icons["bluetooth"],
-            width=35,
-            height=35,
-            fg_color="#1e2130",
-            hover_color="#2c3245",
-            corner_radius=8,
-            command=self.toggle_bluetooth_panel,
-        )
-        self.bluetooth_button.place(relx=0.98, rely=0.97, anchor="se")
 
         self.sequence_label = ctk.CTkLabel(
             self.sequence_frame, text="Secuencia de comandos", font=("Arial", 16, "bold")
@@ -89,21 +73,38 @@ class BlockApp(ctk.CTk):
 
         # ---------------- BOTONES DE CONTROL ----------------
         self.run_button = ctk.CTkButton(
-            self.sequence_frame, text="▶ Ejecutar Secuencia", command=self.execute_sequence
+            self.sequence_frame, text="▶ Ejecutar Secuencia", command=self.start_sequence
         )
         self.run_button.pack(pady=5)
+
+        self.stop_button = ctk.CTkButton(
+            self.sequence_frame, text="⏹ Detener Secuencia", fg_color="red", hover_color="#b22c2c",
+            command=self.stop_sequence
+        )
+        self.stop_button.pack(pady=5)
 
         self.clear_button = ctk.CTkButton(
             self.sequence_frame, text="🗑 Limpiar Secuencia", command=self.clear_sequence
         )
         self.clear_button.pack(pady=5)
 
+        # ---------------- BOTÓN BLUETOOTH INFERIOR DERECHA ----------------
+        self.bluetooth_button = ctk.CTkButton(
+            self.sequence_frame,
+            text="",
+            image=self.icons["bluetooth"],
+            width=35,
+            height=35,
+            fg_color="#1e2130",
+            hover_color="#2c3245",
+            corner_radius=8,
+            command=self.toggle_bluetooth_panel
+        )
+        self.bluetooth_button.place(relx=0.98, rely=0.97, anchor="se")
+
         # ---------------- PANEL BLUETOOTH OCULTO ----------------
         self.bluetooth_panel = None
         self.panel_visible = False
-
-        # ---------------- LISTA DE BLOQUES ----------------
-        self.blocks = []
 
     # =====================================================
     #        PANEL DESLIZABLE BLUETOOTH
@@ -145,11 +146,56 @@ class BlockApp(ctk.CTk):
             self.device_list.insert(tk.END, device)
         messagebox.showinfo("Bluetooth", "Búsqueda finalizada. Dispositivos encontrados ✅")
 
-    # =====================================================
-    #                AGREGAR BLOQUES
-    # =====================================================
+        # ---------------- LISTA DE BLOQUES ----------------
+        self.blocks = []
+
+        # Drag & drop
+        self.drag_data = {"widget": None, "y": 0}
+
+        # Variable para detener ejecución
+        self.stop_execution = False
+
+    # =========================
+    # Drag & Drop funciones
+    # =========================
+    def start_drag(self, event, name, block_type):
+        # Crear un bloque temporal
+        frame = ctk.CTkFrame(self, corner_radius=10, fg_color="#3b3f50")
+        label = ctk.CTkLabel(frame, text=name, font=("Arial", 14))
+        label.pack(padx=10, pady=5)
+        frame.place(x=event.x_root - 50, y=event.y_root - 20)
+        frame.lift()
+        self.drag_data["widget"] = frame
+        self.drag_data["name"] = name
+        self.drag_data["type"] = block_type
+        self.bind("<Motion>", self.do_drag)
+        self.bind("<ButtonRelease-1>", self.stop_drag)
+
+    def do_drag(self, event):
+        w = self.drag_data["widget"]
+        if w:
+            w.place(x=event.x_root - 50, y=event.y_root - 20)
+
+    def stop_drag(self, event):
+        w = self.drag_data["widget"]
+        if w:
+            # Verificar si se suelta sobre block_container
+            x, y = self.block_container.winfo_rootx(), self.block_container.winfo_rooty()
+            w_x, w_y = event.x_root, event.y_root
+            if x < w_x < x + self.block_container.winfo_width() and y < w_y < y + self.block_container.winfo_height():
+                w.destroy()
+                self.add_block(self.drag_data["name"], self.drag_data["type"])
+            else:
+                w.destroy()
+        self.drag_data = {"widget": None, "y": 0}
+        self.unbind("<Motion>")
+        self.unbind("<ButtonRelease-1>")
+
+    # =========================
+    # Agregar bloque a secuencia
+    # =========================
     def add_block(self, name, block_type):
-        frame = ctk.CTkFrame(self.block_container, corner_radius=10)
+        frame = ctk.CTkFrame(self.block_container, corner_radius=10, fg_color="#1a1d29")
         frame.pack(fill="x", pady=5, padx=10)
 
         label = ctk.CTkLabel(frame, text=name, font=("Arial", 14))
@@ -157,27 +203,65 @@ class BlockApp(ctk.CTk):
 
         block_info = {"frame": frame, "type": block_type, "name": name, "label": label, "config": {}}
 
+        # Configurar botones
         if block_type in ["rotate", "stop", "wait", "speed"]:
             ctk.CTkButton(frame, text="⚙ Configurar", width=80, command=lambda b=block_info: self.configure_block(b)).pack(
                 side="right", padx=5
             )
-
         ctk.CTkButton(frame, text="✖", width=30, fg_color="red", command=lambda f=frame: self.remove_block(f)).pack(
             side="right", padx=5
         )
 
+        # Hacer reordenable
+        frame.bind("<ButtonPress-1>", lambda e, b=block_info: self.start_reorder(e, b))
         self.blocks.append(block_info)
 
-    # =====================================================
-    #                CONFIGURAR BLOQUES
-    # =====================================================
+    # =========================
+    # Reordenamiento de bloques
+    # =========================
+    def start_reorder(self, event, block):
+        self.drag_data["widget"] = block
+        self.drag_data["y"] = event.y_root
+        self.bind("<Motion>", self.do_reorder)
+        self.bind("<ButtonRelease-1>", self.stop_reorder)
+
+    def do_reorder(self, event):
+        block = self.drag_data["widget"]
+        if block:
+            dy = event.y_root - self.drag_data["y"]
+            idx = self.blocks.index(block)
+            new_idx = idx
+            # Mover arriba
+            if dy < -20 and idx > 0:
+                self.blocks[idx], self.blocks[idx-1] = self.blocks[idx-1], self.blocks[idx]
+                self.blocks[idx]["frame"].pack_forget()
+                self.blocks[idx]["frame"].pack(fill="x", pady=5, padx=10)
+                self.blocks[idx-1]["frame"].pack_forget()
+                self.blocks[idx-1]["frame"].pack(fill="x", pady=5, padx=10)
+                self.drag_data["y"] = event.y_root
+            # Mover abajo
+            elif dy > 20 and idx < len(self.blocks)-1:
+                self.blocks[idx], self.blocks[idx+1] = self.blocks[idx+1], self.blocks[idx]
+                self.blocks[idx]["frame"].pack_forget()
+                self.blocks[idx]["frame"].pack(fill="x", pady=5, padx=10)
+                self.blocks[idx+1]["frame"].pack_forget()
+                self.blocks[idx+1]["frame"].pack(fill="x", pady=5, padx=10)
+                self.drag_data["y"] = event.y_root
+
+    def stop_reorder(self, event):
+        self.drag_data = {"widget": None, "y": 0}
+        self.unbind("<Motion>")
+        self.unbind("<ButtonRelease-1>")
+
+    # =========================
+    # Configuración de bloques
+    # =========================
     def configure_block(self, block):
         win = ctk.CTkToplevel(self)
         win.title(f"Configurar {block['name']}")
         win.geometry("300x200")
 
         t = block["type"]
-
         if t == "rotate":
             self.make_config(win, block, "Selecciona grados de giro:", "angle", ["45", "90", "180", "360"])
         elif t == "stop":
@@ -201,13 +285,9 @@ class BlockApp(ctk.CTk):
         entry.pack(pady=5)
         ctk.CTkButton(win, text="Guardar", command=lambda: self.save_config(block, {key: val.get()}, win)).pack(pady=10)
 
-    # =====================================================
-    #                GUARDAR CONFIGURACIÓN
-    # =====================================================
     def save_config(self, block, config, win):
         block["config"].update(config)
         win.destroy()
-
         text = block["name"]
         if block["type"] == "rotate":
             text += f" ({block['config']['angle']}°)"
@@ -217,13 +297,11 @@ class BlockApp(ctk.CTk):
             text += f" ({block['config']['time']}s)"
         elif block["type"] == "speed":
             text += f" ({block['config']['speed']}%)"
-
         block["label"].configure(text=text)
-        messagebox.showinfo("Configurado", "Parámetros guardados correctamente ✅")
 
-    # =====================================================
-    #                ELIMINAR Y LIMPIAR
-    # =====================================================
+    # =========================
+    # Eliminar y limpiar bloques
+    # =========================
     def remove_block(self, frame):
         frame.destroy()
         self.blocks = [b for b in self.blocks if b["frame"] != frame]
@@ -233,17 +311,58 @@ class BlockApp(ctk.CTk):
             block["frame"].destroy()
         self.blocks.clear()
 
-    # =====================================================
-    #                EJECUTAR SECUENCIA
-    # =====================================================
+    # =========================
+    # Ejecutar secuencia con iluminación
+    # =========================
+    def start_sequence(self):
+        self.stop_execution = False
+        self.execute_sequence()
+
+    def stop_sequence(self):
+        self.stop_execution = True
+
+    def highlight_block(self, block, color="#3b5c90"):
+        block["frame"].configure(fg_color=color)
+        self.update()
+
+    def unhighlight_block(self, block):
+        block["frame"].configure(fg_color="#1a1d29")
+        self.update()
+
     def execute_sequence(self):
         if not self.blocks:
             messagebox.showwarning("Sin bloques", "No hay bloques en la secuencia.")
             return
+        
+        sequence_copy = self.blocks.copy()
 
-        result = "\n".join(f"{b['name']} → {b['config']}" for b in self.blocks)
+        for block in self.blocks:
+            if self.stop_execution:
+                break
+            self.highlight_block(block)
+
+            duration = 0.5
+            if block["type"] == "wait":
+                duration = block["config"].get("time", 1)
+            elif block["type"] == "stop":
+                duration = block["config"].get("duration", 1)
+
+            elapsed = 0
+            while elapsed < duration:
+                if self.stop_execution:
+                    break
+                self.after(100)
+                self.update()
+                elapsed += 0.1
+
+            self.unhighlight_block(block)
+
+        result = "\n".join(f"{b['name']} -> {b['config']}" for b in self.blocks)
         print(result)
-        messagebox.showinfo("Ejecución", f"Secuencia ejecutada (modo simulado):\n\n{result}")
+        if not self.stop_execution:
+            messagebox.showinfo("Ejecución", f"Secuencia ejecutada (modo simulado):\n\n{result}")
+        else:
+            messagebox.showinfo("Ejecución", "Secuencia detenida por el usuario ⏹")
 
     def on_close(self):
         self.destroy()
