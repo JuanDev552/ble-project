@@ -1,305 +1,254 @@
 import customtkinter as ctk
-import os
+import tkinter as tk
+from tkinter import messagebox
+from PIL import Image
 
-class BluetoothProgramApp(ctk.CTk):
+# Configuración visual general
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+
+class BlockApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        
-        # Configuración de la ventana
-        self.title("Bluetooth BLE")
-        self.geometry("1200x700")
-        ctk.set_appearance_mode("light")
-        
-        # Colores
-        self.BG_COLOR = "#F0F0F0"
-        self.BEAM_COLOR = "#FFFFFF" 
-        self.PANEL_COLOR = "#E0E0E0"
-        
-        self.configure(fg_color=self.BG_COLOR)
-        
-        # Variables
-        self.sequence = []
-        self.is_running = False
-        
-        self.setup_ui()
-    
-    def setup_ui(self):
-        # Configurar grid principal
-        self.grid_rowconfigure(0, weight=0)   # Header
-        self.grid_rowconfigure(1, weight=1)   # Contenido principal  
-        self.grid_rowconfigure(2, weight=0)   # Paleta de bloques
-        self.grid_columnconfigure(0, weight=3) # Área principal
-        self.grid_columnconfigure(1, weight=1) # Panel lateral
-        
-        self.create_header()
-        self.create_sequence_beam()
-        self.create_control_panel()
-        self.create_block_palette()
-    
-    def create_header(self):
-        """Crea el header de la aplicación"""
-        header_frame = ctk.CTkFrame(self, height=60, fg_color="#E0E0E0", corner_radius=0)
-        header_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
-        header_frame.grid_propagate(False)
-        
-        # Título
-        title_label = ctk.CTkLabel(header_frame, text="JPM", 
-                                 font=("Arial", 20, "bold"), 
-                                 text_color="#5A5A5A")
-        title_label.pack(side="left", padx=20, pady=10)
-        
-        # Estado
-        self.status_label = ctk.CTkLabel(header_frame, text="Modo Simulación", 
-                                       font=("Arial", 12),
-                                       text_color="#5A5A5A")
-        self.status_label.pack(side="right", padx=20, pady=10)
-    
-    def create_sequence_beam(self):
-        """Crea la viga de secuencia principal"""
-        beam_frame = ctk.CTkFrame(self, fg_color="#FFFFFF", 
-                                border_width=2, border_color="#CCCCCC",
-                                corner_radius=10)
-        beam_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
-        
-        # Título
-        ctk.CTkLabel(beam_frame, text="Secuencia de Comandos",
-                   font=("Arial", 16, "bold"),
-                   text_color="#333333").pack(pady=10)
-        
-        # Área de la viga (scrollable horizontal)
-        self.beam_area = ctk.CTkScrollableFrame(beam_frame, orientation="horizontal",
-                                              fg_color="#F8F8F8", height=120)
-        self.beam_area.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Indicador de inicio
-        start_frame = ctk.CTkFrame(self.beam_area, width=60, height=80,
-                                 fg_color="#6A9F37", corner_radius=8)
-        start_frame.pack(side="left", padx=5, pady=10)
-        ctk.CTkLabel(start_frame, text="▶", font=("Arial", 24, "bold"),
-                   text_color="white").pack(expand=True)
-        
-        # Área para bloques de secuencia
-        self.sequence_frame = ctk.CTkFrame(self.beam_area, fg_color="transparent")
-        self.sequence_frame.pack(side="left", fill="both", expand=True)
-        
-        # Mensaje inicial
-        self.empty_label = ctk.CTkLabel(self.sequence_frame, 
-                                      text="Arrastra bloques aquí para crear una secuencia",
-                                      font=("Arial", 12),
-                                      text_color="#888888")
-        self.empty_label.pack(expand=True)
-    
-    def create_control_panel(self):
-        """Crea el panel de control lateral"""
-        panel_frame = ctk.CTkFrame(self, fg_color="#E8E8E8", 
-                                 corner_radius=10, border_width=2,
-                                 border_color="#CCCCCC")
-        panel_frame.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
-        
-        # Título
-        ctk.CTkLabel(panel_frame, text="Controles", 
-                   font=("Arial", 16, "bold")).pack(pady=15)
-        
-        # Botones de ejecución
-        self.create_execution_buttons(panel_frame)
-        
-        # Estado
-        self.create_status_display(panel_frame)
-        
-        # Controles de dispositivo
-        self.create_device_controls(panel_frame)
-    
-    def create_execution_buttons(self, parent):
-        """Crea los botones de ejecución"""
-        exec_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        exec_frame.pack(pady=10)
-        
-        # Botón Play
-        self.play_btn = ctk.CTkButton(exec_frame, text="▶ Ejecutar", 
-                                    width=120, height=50,
-                                    fg_color="#43A047",
-                                    hover_color="#388E3C",
-                                    font=("Arial", 14, "bold"),
-                                    command=self.execute_sequence)
-        self.play_btn.pack(pady=5)
-        
-        # Botón Stop
-        self.stop_btn = ctk.CTkButton(exec_frame, text="⏹ Detener", 
-                                    width=120, height=40,
-                                    fg_color="#E53935",
-                                    hover_color="#C62828",
-                                    font=("Arial", 12, "bold"),
-                                    command=self.stop_sequence,
-                                    state="disabled")
-        self.stop_btn.pack(pady=5)
-        
-        # Botón Limpiar
-        ctk.CTkButton(exec_frame, text="🗑 Limpiar", 
-                     width=120, height=35,
-                     fg_color="#78909C",
-                     hover_color="#546E7A",
-                     font=("Arial", 12),
-                     command=self.clear_sequence).pack(pady=5)
-    
-    def create_status_display(self, parent):
-        """Crea el display de estado"""
-        separator = ctk.CTkFrame(parent, height=2, fg_color="#CCCCCC")
-        separator.pack(fill="x", padx=20, pady=10)
-        
-        status_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        status_frame.pack(pady=10, fill="x", padx=20)
-        
-        ctk.CTkLabel(status_frame, text="Estado:", 
-                    font=("Arial", 12, "bold")).pack(anchor="w")
-        
-        self.status_text = ctk.CTkTextbox(status_frame, height=60, 
-                                        font=("Arial", 11))
-        self.status_text.pack(fill="x", pady=5)
-        self.status_text.insert("1.0", "Secuencia lista.\nArrastra bloques para comenzar.")
-        self.status_text.configure(state="disabled")
-    
-    def create_device_controls(self, parent):
-        """Crea controles de dispositivo"""
-        separator = ctk.CTkFrame(parent, height=2, fg_color="#CCCCCC")
-        separator.pack(fill="x", padx=20, pady=10)
-        
-        device_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        device_frame.pack(pady=10, fill="x", padx=20)
-        
-        ctk.CTkLabel(device_frame, text="Dispositivo:", 
-                    font=("Arial", 12, "bold")).pack(anchor="w")
-        
-        # Botón de conexión
-        self.connect_btn = ctk.CTkButton(device_frame, text="🔗 Conectar Dispositivo",
-                                       fg_color="#007ACC",
-                                       hover_color="#1565C0",
-                                       command=self.simulate_connection)
-        self.connect_btn.pack(fill="x", pady=5)
-        
-        # Estado de conexión
-        self.connection_status = ctk.CTkLabel(device_frame, 
-                                            text="Desconectado",
-                                            text_color="#E53935",
-                                            font=("Arial", 10))
-        self.connection_status.pack(anchor="w")
-    
-    def create_block_palette(self):
-        """Crea la paleta de bloques en la parte inferior"""
-        palette_frame = ctk.CTkFrame(self, height=150, fg_color="#D8D8D8")
-        palette_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
-        palette_frame.grid_propagate(False)
-        
-        ctk.CTkLabel(palette_frame, text="Bloques de Comando", 
-                    font=("Arial", 14, "bold")).pack(pady=10)
-        
-        # Frame para los bloques
-        blocks_frame = ctk.CTkFrame(palette_frame, fg_color="transparent")
-        blocks_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        # Definir bloques disponibles
-        blocks = [
-            {"name": "Adelante", "color": "#8CC63F", "icon": "▲", "type": "motor"},
-            {"name": "Atrás", "color": "#8CC63F", "icon": "▼", "type": "motor"},
-            {"name": "Izquierda", "color": "#8CC63F", "icon": "◀", "type": "motor"},
-            {"name": "Derecha", "color": "#8CC63F", "icon": "▶", "type": "motor"},
-            {"name": "Detener", "color": "#E53935", "icon": "⏹", "type": "control"},
-            {"name": "Esperar", "color": "#FFC107", "icon": "⏱", "type": "control"},
-            {"name": "Velocidad", "color": "#007ACC", "icon": "⚡", "type": "config"},
+
+        self.title("Control Bluetooth - Bloques Configurables")
+        self.geometry("1000x600")
+
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        # ---------------- ICONOS ----------------
+        self.icons = {
+            "up": ctk.CTkImage(light_image=Image.open("icons/up.png"), size=(30, 30)),
+            "down": ctk.CTkImage(light_image=Image.open("icons/down.png"), size=(30, 30)),
+            "left": ctk.CTkImage(light_image=Image.open("icons/left.png"), size=(30, 30)),
+            "right": ctk.CTkImage(light_image=Image.open("icons/right.png"), size=(30, 30)),
+            "rotate": ctk.CTkImage(light_image=Image.open("icons/rotate.png"), size=(40, 40)),
+            "stop": ctk.CTkImage(light_image=Image.open("icons/stop.png"), size=(40, 40)),
+            "wait": ctk.CTkImage(light_image=Image.open("icons/wait.png"), size=(40, 40)),
+            "speed": ctk.CTkImage(light_image=Image.open("icons/speed.png"), size=(40, 40)),
+            "bluetooth": ctk.CTkImage(light_image=Image.open("icons/bluetooth.png"), size=(25, 25)),
+        }
+
+        # ---------------- PANEL IZQUIERDO ----------------
+        self.block_frame = ctk.CTkFrame(self, width=250)
+        self.block_frame.pack(side="left", fill="y", padx=10, pady=10)
+
+        ctk.CTkLabel(self.block_frame, text="Bloques disponibles", font=("Arial", 16, "bold")).pack(pady=5)
+
+        # Lista de bloques disponibles
+        self.available_blocks = [
+            ("Adelante", "move_forward", self.icons["up"]),
+            ("Atrás", "move_backward", self.icons["down"]),
+            ("Izquierda", "move_left", self.icons["left"]),
+            ("Derecha", "move_right", self.icons["right"]),
+            ("Girar", "rotate", self.icons["rotate"]),
+            ("Detener", "stop", self.icons["stop"]),
+            ("Esperar", "wait", self.icons["wait"]),
+            ("Velocidad", "speed", self.icons["speed"]),
         ]
-        
-        # Crear bloques
-        for block in blocks:
-            self.create_block(blocks_frame, block)
-    
-    def create_block(self, parent, block):
-        """Crea un bloque individual en la paleta"""
-        block_frame = ctk.CTkFrame(parent, width=80, height=80, 
-                                 fg_color=block["color"],
-                                 corner_radius=8,
-                                 border_width=2,
-                                 border_color=self.darken_color(block["color"]))
-        block_frame.pack(side="left", padx=5, pady=5)
-        block_frame.pack_propagate(False)
-        
-        # Icono
-        icon_label = ctk.CTkLabel(block_frame, text=block["icon"],
-                                font=("Arial", 24, "bold"),
-                                text_color="white")
-        icon_label.pack(expand=True)
-        
-        # Nombre
-        name_label = ctk.CTkLabel(block_frame, text=block["name"],
-                                font=("Arial", 10),
-                                text_color="white")
-        name_label.pack(expand=True)
-        
-        # Hacer arrastrable
-        for widget in [block_frame, icon_label, name_label]:
-            widget.bind("<ButtonPress-1>", lambda e, b=block: self.start_drag(e, b))
-    
-    def start_drag(self, event, block):
-        """Inicia el arrastre de un bloque"""
-        print(f"Arrastrando: {block['name']}")
-        # Aquí iría la lógica de arrastre visual
-    
-    def execute_sequence(self):
-        """Ejecuta la secuencia"""
-        if not self.sequence:
-            self.update_status("Error: No hay secuencia para ejecutar")
+
+        # Crear botones de bloques
+        for name, block_type, icon in self.available_blocks:
+            btn = ctk.CTkButton(
+                self.block_frame,
+                text="",
+                image=icon,
+                fg_color="#1a1d29",
+                hover_color="#2b2f3d",
+                command=lambda n=name, t=block_type: self.add_block(n, t),
+                height=50,
+            )
+            btn.pack(pady=4, fill="x")
+
+        # ---------------- PANEL CENTRAL ----------------
+        self.sequence_frame = ctk.CTkFrame(self)
+        self.sequence_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+
+        # Botón Bluetooth (esquina superior derecha)
+        self.bluetooth_button = ctk.CTkButton(
+            self.sequence_frame,
+            text="",
+            image=self.icons["bluetooth"],
+            width=35,
+            height=35,
+            fg_color="#1e2130",
+            hover_color="#2c3245",
+            corner_radius=8,
+            command=self.toggle_bluetooth_panel,
+        )
+        self.bluetooth_button.place(relx=0.98, rely=0.97, anchor="se")
+
+        self.sequence_label = ctk.CTkLabel(
+            self.sequence_frame, text="Secuencia de comandos", font=("Arial", 16, "bold")
+        )
+        self.sequence_label.pack(pady=5)
+
+        self.block_container = ctk.CTkFrame(self.sequence_frame)
+        self.block_container.pack(fill="both", expand=True, pady=10)
+
+        # ---------------- BOTONES DE CONTROL ----------------
+        self.run_button = ctk.CTkButton(
+            self.sequence_frame, text="▶ Ejecutar Secuencia", command=self.execute_sequence
+        )
+        self.run_button.pack(pady=5)
+
+        self.clear_button = ctk.CTkButton(
+            self.sequence_frame, text="🗑 Limpiar Secuencia", command=self.clear_sequence
+        )
+        self.clear_button.pack(pady=5)
+
+        # ---------------- PANEL BLUETOOTH OCULTO ----------------
+        self.bluetooth_panel = None
+        self.panel_visible = False
+
+        # ---------------- LISTA DE BLOQUES ----------------
+        self.blocks = []
+
+    # =====================================================
+    #        PANEL DESLIZABLE BLUETOOTH
+    # =====================================================
+    def toggle_bluetooth_panel(self):
+        if self.panel_visible:
+            if self.bluetooth_panel:
+                self.bluetooth_panel.destroy()
+                self.panel_visible = False
             return
-            
-        self.is_running = True
-        self.play_btn.configure(state="disabled")
-        self.stop_btn.configure(state="normal")
-        self.update_status("Ejecutando secuencia...")
-    
-    def stop_sequence(self):
-        """Detiene la secuencia"""
-        self.is_running = False
-        self.play_btn.configure(state="normal")
-        self.stop_btn.configure(state="disabled")
-        self.update_status("Secuencia detenida")
-    
+
+        self.panel_visible = True
+        self.bluetooth_panel = ctk.CTkFrame(self, width=250, corner_radius=10)
+        self.bluetooth_panel.pack(side="right", fill="y", padx=10, pady=10)
+
+        ctk.CTkLabel(self.bluetooth_panel, text="Dispositivos Bluetooth", font=("Arial", 16, "bold")).pack(pady=10)
+
+        self.device_list = tk.Listbox(self.bluetooth_panel, bg="#1c1f2b", fg="white", relief="flat", height=10)
+        self.device_list.pack(padx=10, pady=5, fill="both", expand=True)
+
+        search_button = ctk.CTkButton(self.bluetooth_panel, text="🔍 Buscar dispositivos", command=self.search_devices)
+        search_button.pack(pady=5)
+
+        close_button = ctk.CTkButton(
+            self.bluetooth_panel, text="❌ Cerrar", fg_color="red", hover_color="#b22c2c", command=self.close_bluetooth_panel
+        )
+        close_button.pack(pady=5)
+
+    def close_bluetooth_panel(self):
+        if self.bluetooth_panel:
+            self.bluetooth_panel.destroy()
+            self.panel_visible = False
+
+    def search_devices(self):
+        # Simulación de búsqueda de dispositivos
+        self.device_list.delete(0, tk.END)
+        fake_devices = ["HC-05 (Carro)", "ESP32-Bot", "BT-Control", "Arduino_BT"]
+        for device in fake_devices:
+            self.device_list.insert(tk.END, device)
+        messagebox.showinfo("Bluetooth", "Búsqueda finalizada. Dispositivos encontrados ✅")
+
+    # =====================================================
+    #                AGREGAR BLOQUES
+    # =====================================================
+    def add_block(self, name, block_type):
+        frame = ctk.CTkFrame(self.block_container, corner_radius=10)
+        frame.pack(fill="x", pady=5, padx=10)
+
+        label = ctk.CTkLabel(frame, text=name, font=("Arial", 14))
+        label.pack(side="left", padx=10, pady=5)
+
+        block_info = {"frame": frame, "type": block_type, "name": name, "label": label, "config": {}}
+
+        if block_type in ["rotate", "stop", "wait", "speed"]:
+            ctk.CTkButton(frame, text="⚙ Configurar", width=80, command=lambda b=block_info: self.configure_block(b)).pack(
+                side="right", padx=5
+            )
+
+        ctk.CTkButton(frame, text="✖", width=30, fg_color="red", command=lambda f=frame: self.remove_block(f)).pack(
+            side="right", padx=5
+        )
+
+        self.blocks.append(block_info)
+
+    # =====================================================
+    #                CONFIGURAR BLOQUES
+    # =====================================================
+    def configure_block(self, block):
+        win = ctk.CTkToplevel(self)
+        win.title(f"Configurar {block['name']}")
+        win.geometry("300x200")
+
+        t = block["type"]
+
+        if t == "rotate":
+            self.make_config(win, block, "Selecciona grados de giro:", "angle", ["45", "90", "180", "360"])
+        elif t == "stop":
+            self.make_entry(win, block, "Segundos para detenerse:", "duration", 1.0)
+        elif t == "wait":
+            self.make_entry(win, block, "Segundos para esperar:", "time", 1.0)
+        elif t == "speed":
+            self.make_entry(win, block, "Velocidad (1-100):", "speed", 50)
+
+    def make_config(self, win, block, text, key, values):
+        ctk.CTkLabel(win, text=text).pack(pady=10)
+        value = tk.StringVar(value=block["config"].get(key, values[0]))
+        combo = ctk.CTkComboBox(win, values=values, variable=value)
+        combo.pack(pady=5)
+        ctk.CTkButton(win, text="Guardar", command=lambda: self.save_config(block, {key: value.get()}, win)).pack(pady=10)
+
+    def make_entry(self, win, block, text, key, default):
+        ctk.CTkLabel(win, text=text).pack(pady=10)
+        val = tk.DoubleVar(value=block["config"].get(key, default))
+        entry = ctk.CTkEntry(win, textvariable=val)
+        entry.pack(pady=5)
+        ctk.CTkButton(win, text="Guardar", command=lambda: self.save_config(block, {key: val.get()}, win)).pack(pady=10)
+
+    # =====================================================
+    #                GUARDAR CONFIGURACIÓN
+    # =====================================================
+    def save_config(self, block, config, win):
+        block["config"].update(config)
+        win.destroy()
+
+        text = block["name"]
+        if block["type"] == "rotate":
+            text += f" ({block['config']['angle']}°)"
+        elif block["type"] == "stop":
+            text += f" ({block['config']['duration']}s)"
+        elif block["type"] == "wait":
+            text += f" ({block['config']['time']}s)"
+        elif block["type"] == "speed":
+            text += f" ({block['config']['speed']}%)"
+
+        block["label"].configure(text=text)
+        messagebox.showinfo("Configurado", "Parámetros guardados correctamente ✅")
+
+    # =====================================================
+    #                ELIMINAR Y LIMPIAR
+    # =====================================================
+    def remove_block(self, frame):
+        frame.destroy()
+        self.blocks = [b for b in self.blocks if b["frame"] != frame]
+
     def clear_sequence(self):
-        """Limpia la secuencia"""
-        self.sequence = []
-        # Limpiar visualmente la viga
-        for widget in self.sequence_frame.winfo_children():
-            widget.destroy()
-        self.empty_label.pack(expand=True)
-        self.update_status("Secuencia limpiada")
-    
-    def simulate_connection(self):
-        """Simula conexión de dispositivo"""
-        self.connect_btn.configure(state="disabled", text="Conectando...")
-        self.connection_status.configure(text="Conectando...", text_color="#FF9800")
-        
-        # Simular conexión después de 2 segundos
-        self.after(2000, self.finish_connection)
-    
-    def finish_connection(self):
-        """Finaliza la simulación de conexión"""
-        self.connect_btn.configure(state="normal", text="🔗 Conectar Dispositivo")
-        self.connection_status.configure(text="Conectado (Simulación)", text_color="#43A047")
-        self.update_status("Dispositivo conectado en modo simulación")
-    
-    def update_status(self, message):
-        """Actualiza el display de estado"""
-        self.status_text.configure(state="normal")
-        self.status_text.delete("1.0", "end")
-        self.status_text.insert("1.0", message)
-        self.status_text.configure(state="disabled")
-    
-    def darken_color(self, hex_color, factor=0.8):
-        """Oscurece un color hexadecimal"""
-        try:
-            r = int(hex_color[1:3], 16)
-            g = int(hex_color[3:5], 16)
-            b = int(hex_color[5:7], 16)
-            return f"#{int(r*factor):02x}{int(g*factor):02x}{int(b*factor):02x}"
-        except:
-            return hex_color
+        for block in self.blocks:
+            block["frame"].destroy()
+        self.blocks.clear()
+
+    # =====================================================
+    #                EJECUTAR SECUENCIA
+    # =====================================================
+    def execute_sequence(self):
+        if not self.blocks:
+            messagebox.showwarning("Sin bloques", "No hay bloques en la secuencia.")
+            return
+
+        result = "\n".join(f"{b['name']} → {b['config']}" for b in self.blocks)
+        print(result)
+        messagebox.showinfo("Ejecución", f"Secuencia ejecutada (modo simulado):\n\n{result}")
+
+    def on_close(self):
+        self.destroy()
+
 
 if __name__ == "__main__":
-    app = BluetoothProgramApp()
+    app = BlockApp()
     app.mainloop()
