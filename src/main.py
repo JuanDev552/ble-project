@@ -4,7 +4,7 @@ from tkinter import messagebox
 from PIL import Image
 import serial
 import serial.tools.list_ports
-import time  # ← IMPORT DE TIME AGREGADO
+import time 
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -26,7 +26,7 @@ class BlockApp(ctk.CTk):
         self.block_width = 120
         self.block_height = 160
         self.block_spacing = 8
-        self.current_executing_block = None  # ← NUEVO: Para rastrear bloque actual
+        self.current_executing_block = None
 
         # ---------------- ICONOS ----------------
         self.icons = {
@@ -42,7 +42,7 @@ class BlockApp(ctk.CTk):
             "trash": ctk.CTkImage(light_image=Image.open("icons/trash.png"), size=(35, 35)),
         }
 
-        # ---------------- PANEL IZQUIERDO (BLOQUES DISPONIBLES) ----------------
+        # ---------------- PANEL IZQUIERDO ----------------
         self.block_palette = ctk.CTkFrame(self, width=180, fg_color="#111317")
         self.block_palette.pack(side="left", fill="y", padx=8, pady=8)
 
@@ -73,11 +73,11 @@ class BlockApp(ctk.CTk):
             btn.pack(pady=8)
             btn.bind("<ButtonPress-1>", lambda e, n=name, t=block_type, i=icon: self.start_drag(e, n, t, i))
 
-        # ---------------- ÁREA DE TRABAJO LIBRE ----------------
+        # ---------------- ÁREA DE TRABAJO ----------------
         self.workspace = ctk.CTkFrame(self, fg_color="#1a1d29")
         self.workspace.pack(side="left", fill="both", expand=True, padx=8, pady=8)
 
-        # ---------------- BOTONES DE CONTROL ----------------
+        # ---------------- BOTONES ----------------
         control_frame = ctk.CTkFrame(self.workspace, fg_color="transparent")
         control_frame.pack(side="bottom", fill="x", pady=10)
 
@@ -150,7 +150,6 @@ class BlockApp(ctk.CTk):
                                              fg_color="#b22c2c", command=self.disconnect_serial)
         self.disconnect_button.grid(row=0, column=1, padx=8)
 
-        # Botón Bluetooth flotante
         self.bluetooth_button = ctk.CTkButton(
             self.workspace,
             text="",
@@ -164,9 +163,9 @@ class BlockApp(ctk.CTk):
         )
         self.bluetooth_button.place(relx=0.98, rely=0.02, anchor="ne")
 
-    # =========================
-    # SISTEMA DE ARRASTRE (MANTENER IGUAL)
-    # =========================
+    # ======================================================
+    # SISTEMA DE ARRASTRE 
+    # ======================================================
     def start_drag(self, event, name, block_type, icon):
         drag_block = ctk.CTkLabel(self, image=icon, text="", fg_color="#2c2f3b", corner_radius=10)
         drag_block.place(x=event.x_root - 30, y=event.y_root - 30)
@@ -276,15 +275,21 @@ class BlockApp(ctk.CTk):
             config_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
             config_frame.pack(fill="x", pady=(10, 0))
             
-            entry = ctk.CTkEntry(config_frame, width=70, placeholder_text="90", height=24)
-            entry.insert(0, "90")
+            # ComboBox para grados específicos
+            entry = ctk.CTkComboBox(
+                config_frame, 
+                values=["45", "90", "180", "360"],
+                width=70, 
+                height=24,
+                state="readonly"
+            )
+            entry.set("90")
             entry.pack(pady=2)
             
         elif block_type == "speed":
             config_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
             config_frame.pack(fill="x", pady=(10, 0))
             
-            # NUEVO: ComboBox para velocidad 1-9
             entry = ctk.CTkComboBox(
                 config_frame, 
                 values=["1", "2", "3", "4", "5", "6", "7", "8", "9"],
@@ -292,7 +297,7 @@ class BlockApp(ctk.CTk):
                 height=24,
                 state="readonly"
             )
-            entry.set("5")  # Valor por defecto
+            entry.set("5")
             entry.pack(pady=2)
         
         del_btn = ctk.CTkButton(
@@ -362,9 +367,9 @@ class BlockApp(ctk.CTk):
         for block in self.blocks[:]:
             self.remove_block(block)
 
-    # =========================
-    # EJECUCIÓN MEJORADA CON SINCRONIZACIÓN PERFECTA
-    # =========================
+    # ======================================================
+    # EJECUCIÓN 
+    # ======================================================
     def start_execution(self):
         if not self.blocks:
             messagebox.showwarning("Sin bloques", "No hay bloques en el área de trabajo.")
@@ -374,17 +379,15 @@ class BlockApp(ctk.CTk):
             messagebox.showwarning("Sin conexión", "No hay dispositivo conectado.")
             return
 
-        # Deshabilitar botón de ejecución durante la ejecución
         self.run_button.configure(state="disabled")
         
         sorted_blocks = sorted(self.blocks, key=lambda b: (b["y"], b["x"]))
-        velocidad = 200  # Velocidad por defecto
+        velocidad = 200 
         
         self._execute_blocks_async(sorted_blocks, 0, velocidad)
 
     def _execute_blocks_async(self, blocks, index, velocidad):
         if index >= len(blocks):
-            # Rehabilitar botón al finalizar
             self.run_button.configure(state="normal")
             self.send_serial("S\n")
             self.after(0, lambda: messagebox.showinfo("Completado", "Secuencia terminada"))
@@ -393,7 +396,6 @@ class BlockApp(ctk.CTk):
         block = blocks[index]
         command = block["type"]
         
-        # Leer valor del campo
         param_value = 1
         if "entry" in block and block["entry"]:
             try:
@@ -403,104 +405,106 @@ class BlockApp(ctk.CTk):
             except:
                 param_value = 1
 
-        # RESALTADO INMEDIATO Y SINCRONIZADO
         self.after(0, lambda b=block: self.highlight_block(b))
-        self.update()  # ← CLAVE: Forzar actualización inmediata de la interfaz
-        
-        # Configurar comando y delay según el tipo de bloque
+        self.update()
+
         if command == "speed":
-            # CONVERTIR 1-9 a 28-255 (igual que tu compañero)
-            velocidad_escala = max(1, min(9, int(param_value)))  # Asegurar entre 1-9
+            velocidad_escala = max(1, min(9, int(param_value)))
             velocidad = int((velocidad_escala - 1) / 8 * 227 + 28)
-            print(f"Velocidad configurada: {velocidad_escala} -> {velocidad}/255")
             delay = 500
             
         elif command == "time":
             msg = f"T{int(param_value * 1000)}\n"
             self.send_serial(msg)
-            print(f"Esperando: {param_value}s")
             delay = int(param_value * 1000)
             
         elif command in ["move_left", "move_right"]:
             letra = "L" if command == "move_left" else "R"
-            msg = f"{letra}{velocidad}\n"  # Usar velocidad convertida
-            self.send_serial(msg)
-            print(f"Enviando giro: {msg.strip()} - {param_value}° a velocidad {velocidad}")
-            delay = int((param_value / 90) * 1000)
             
+            # Leer correctamente el ComboBox
+            if "entry" in block and block["entry"]:
+                try:
+                    texto = block["entry"].get().strip()
+                    if texto:
+                        grados_configurados = int(texto)
+                    else:
+                        grados_configurados = 90
+                except:
+                    grados_configurados = 90
+            else:
+                grados_configurados = 90
+            
+            # ✅ PRUEBA: 4x los grados
+            grados_enviar = grados_configurados * 8
+            
+            msg = f"{letra}{grados_enviar}\n"
+            self.send_serial(msg)
+
+            print(f"Giro enviado: {msg.strip()}  ({grados_configurados} config -> {grados_enviar} sent)")
+
+            # Delay proporcional
+            delay = int((grados_configurados / 90.0) * 800)
+            delay = max(delay, 200)
+
+            print(f"Delay calculado: {delay} ms")
+
         elif command in ["move_forward", "move_backward"]:
             letra = "F" if command == "move_forward" else "B"
-            msg = f"{letra}{velocidad}\n"  # Usar velocidad convertida
+            msg = f"{letra}{velocidad}\n"
             self.send_serial(msg)
             delay = int(param_value * 1000) if param_value > 0 else 1000
-            print(f"Movimiento: {msg.strip()} por {param_value}s a velocidad {velocidad}")
             
         else:
             delay = 500
 
-        # Programar siguiente bloque con manejo mejorado
         self.after(delay + 50, lambda: self._finish_block_async(blocks, index, velocidad, block))
 
     def _finish_block_async(self, blocks, index, velocidad, block):
-        # Quitar resaltado INMEDIATAMENTE
         self.after(0, lambda b=block: self.unhighlight_block(b))
-        self.update()  # ← CLAVE: Forzar actualización inmediata
+        self.update()
         
-        # Enviar STOP si fue un movimiento
         command = block["type"]
         if command in ["move_forward", "move_backward", "move_left", "move_right"]:
             self.send_serial("S\n")
-            print("Movimiento detenido")
-            # Pequeña pausa después del stop
             self.after(100, lambda: self._execute_blocks_async(blocks, index + 1, velocidad))
         else:
-            # Ejecutar siguiente bloque inmediatamente
             self._execute_blocks_async(blocks, index + 1, velocidad)
 
     def stop_execution(self):
-        """Detener la ejecución cancelando todos los after programados"""
         print("Deteniendo ejecución...")
         
-        # Rehabilitar botón de ejecución
         self.run_button.configure(state="normal")
         
-        # Quitar resaltado del bloque actual si existe
-        if hasattr(self, 'current_executing_block') and self.current_executing_block:
+        if getattr(self, 'current_executing_block', None):
             self.unhighlight_block(self.current_executing_block)
         
-        # Cancelar todos los after programados
         for after_id in self.tk.eval('after info').split():
             self.after_cancel(after_id)
         
-        # Enviar comando de stop al Arduino
         self.send_serial("S\n")
         messagebox.showinfo("Detenido", "Ejecución cancelada")
 
     def highlight_block(self, block):
-        """Resaltar bloque con efecto visual más marcado"""
         block["frame"].configure(
             fg_color="#355a9a", 
             border_color="#4a72c4",
             border_width=3
         )
-        self.current_executing_block = block  # ← Guardar referencia
-        # Forzar actualización inmediata del widget
+        self.current_executing_block = block
         block["frame"].update_idletasks()
 
     def unhighlight_block(self, block):
-        """Quitar resaltado del bloque"""
         block["frame"].configure(
             fg_color="#22252e", 
             border_color="#2a2e3a",
             border_width=2
         )
-        # Forzar actualización inmediata del widget
         block["frame"].update_idletasks()
-        self.current_executing_block = None  # ← Limpiar referencia
+        self.current_executing_block = None
 
-    # =========================
-    # BLUETOOTH (MANTENER IGUAL)
-    # =========================
+    # ======================================================
+    # BLUETOOTH 
+    # ======================================================
     def toggle_bluetooth_panel(self):
         if self.bluetooth_panel.winfo_ismapped():
             self.bluetooth_panel.pack_forget()
@@ -554,10 +558,7 @@ class BlockApp(ctk.CTk):
 
     def select_port(self, port, device_info=None):
         self.selected_port = port
-        if device_info:
-            display_text = f"Seleccionado: {device_info}"
-        else:
-            display_text = f"Seleccionado: {port}"
+        display_text = f"Seleccionado: {device_info}" if device_info else f"Seleccionado: {port}"
         
         self.connection_info.configure(text=display_text, text_color="blue")
         print(f"Dispositivo seleccionado: {device_info}")
@@ -589,17 +590,13 @@ class BlockApp(ctk.CTk):
             time.sleep(2)
         
             print("Buscando ROBOT_CONECTADO...")
-            initial_responses = []
             start_time = time.time()
             while time.time() - start_time < 3:
                 if self.serial_port.in_waiting > 0:
                     try:
                         line = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
                         if line:
-                            initial_responses.append(line)
                             print(f"ARDUINO: {line}")
-                            if "ROBOT_CONECTADO" in line:
-                                print("ROBOT DETECTADO Y CONECTADO!")
                     except Exception as e:
                         print(f"Error leyendo: {e}")
                 time.sleep(0.1)
@@ -630,24 +627,17 @@ class BlockApp(ctk.CTk):
                 self.serial_port.flush()
             
                 time.sleep(0.3)
-                responses = []
                 start_time = time.time()
                 while time.time() - start_time < 1.5:
                     if self.serial_port.in_waiting > 0:
                         try:
                             line = self.serial_port.readline().decode('utf-8', errors='ignore').strip()
                             if line:
-                                responses.append(line)
                                 print(f"RESPUESTA: '{line}'")
                         except Exception as e:
                             print(f"Error decodificando: {e}")
                     time.sleep(0.1)
             
-                if not responses:
-                    print("No hubo respuesta")
-                else:
-                    print(f"Comando ejecutado - {len(responses)} respuestas")
-                
             else:
                 print("Puerto no conectado")
         except Exception as e:
@@ -657,6 +647,7 @@ class BlockApp(ctk.CTk):
         if self.serial_port:
             self.serial_port.close()
         self.destroy()
+
 
 if __name__ == "__main__":
     app = BlockApp()
